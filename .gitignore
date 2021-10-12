@@ -1,1 +1,2 @@
-*.wav
+Music/
+__pycache__/
