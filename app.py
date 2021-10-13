@@ -1,11 +1,11 @@
-from logging import error
 import PySimpleGUI as sg
 import os
+from PySimpleGUI.PySimpleGUI import Column
 import requests
 import json
 from PIL import Image
 import urllib
-from utils.music_utilities import get_files_inside_directory_not_recursive, play_sound, is_sound_playing, pause_sounds, posicao, stop_sounds, unpause
+from utils.music_utilities import aumentar, diminuir, get_files_inside_directory_not_recursive, play_sound, is_sound_playing, pause_sounds, posicao, stop_sounds, unpause, volume
 from ShazamAPI import Shazam
 import misc
 
@@ -14,17 +14,17 @@ tocando = False
 sg.theme('Reddit')
 song_title_column = [
     [sg.Text(text='Press play..', justification='center', background_color='black',
-             text_color='white', size=(200, 0), font='Tahoma', key='song_name')]
-]
-
-player_info = [
-    [sg.Text('PySimpleGUI Player - By youtube.com/devaprender',
-             background_color='black', text_color='white',  font=('Tahoma', 7))]
+             text_color='white', size=(200, 0), font='Roboto', key='song_name')]
 ]
 
 currently_playing = [
     [sg.Text(background_color='black', size=(200, 0), text_color='white',
              font=('Tahoma', 10), key='currently_playing')]
+]
+
+timer_volume = [
+    [sg.Text('0:00/0:00', key='tempo', background_color='black', text_color='white'),
+    sg.Text('Volume: 0', key='volume', background_color='black', text_color='white')]
 ]
 
 GO_BACK_IMAGE_PATH = './Images/back.png'
@@ -33,12 +33,11 @@ PLAY_SONG_IMAGE_PATH = './Images/play_button.png'
 PAUSE_SONG_IMAGE_PATH = './Images/pause.png'
 ALBUM_COVER_IMAGE_PATH = './Images/pylot.png'
 IMAGE_ALBUM = './Images/pylot.png'
+AUTO_FALANTE_COM = './Images/altofalantecom.png'
+AUTO_FALANTE_SEM = './Images/altofalantesem.png'
 
 
 main = [
-    [sg.Canvas(background_color='black', size=(480, 20), pad=None)],
-    [sg.Column(layout=player_info, justification='c',
-               element_justification='c', background_color='black')],
     [
         sg.Canvas(background_color='black', size=(40, 350), pad=None),
         sg.Image(filename=IMAGE_ALBUM, key='image_album', 
@@ -49,9 +48,14 @@ main = [
     [sg.Column(song_title_column, background_color='black',
                justification='c', element_justification='c')],
     [sg.Text('_'*80, background_color='black', text_color='white')],
-    [sg.Text('0:00/0:00', key='tempo', background_color='black', text_color='white')],
     [
-        sg.Canvas(background_color='black', size=(99, 200), pad=(0, 0)),
+        sg.Column(timer_volume, background_color='black',
+               justification='c', element_justification='c')
+    ],
+    [
+        sg.Canvas(background_color='black', size=(35, 200), pad=(0, 0)),
+        sg.Image(pad=(10, 0), filename=AUTO_FALANTE_SEM, enable_events=True,
+                 size=(40, 40), key='diminuir', background_color='black'),
         sg.Image(pad=(10, 0), filename=GO_BACK_IMAGE_PATH, enable_events=True,
                  size=(35, 44), key='previous', background_color='black'),
         sg.Image(filename=PLAY_SONG_IMAGE_PATH,
@@ -59,7 +63,10 @@ main = [
         sg.Image(filename=PAUSE_SONG_IMAGE_PATH,
                  size=(58, 58), pad=(10, 0), enable_events=True, key='pause', background_color='black'),
         sg.Image(filename=GO_FORWARD_IMAGE_PATH, enable_events=True,
-                 size=(35, 44), pad=(10, 0), key='next', background_color='black')
+                 size=(35, 44), pad=(10, 0), key='next', background_color='black'),
+        sg.Image(pad=(10, 0), filename=AUTO_FALANTE_COM, enable_events=True,
+                 size=(40, 40), key='aumentar', background_color='black'),
+        sg.Canvas(background_color='black', size=(18, 200), pad=(0, 0)),
     ],
     [sg.Column(layout=currently_playing, justification='c',
                element_justification='c', background_color='black', pad=None)]
@@ -80,6 +87,8 @@ window['play'].Widget.config(cursor="hand2")
 window['pause'].Widget.config(cursor="hand2")
 window['next'].Widget.config(cursor="hand2")
 window['previous'].Widget.config(cursor="hand2")
+window['aumentar'].Widget.config(cursor="hand2")
+window['diminuir'].Widget.config(cursor="hand2")
 
 def atualizar_tempo():
     tempo_atual = posicao()
@@ -119,6 +128,11 @@ def update_cover():
     window['image_album'].update(IMAGE_ALBUM)
     return
 
+def update_volume():
+    volume_str = volume()
+    volume_str = 'Volume: %s' % volume_str
+    window['volume'].update(volume_str)
+
 def show_lyrics(json_obj):
     keys = json_obj['track']['sections'][1]['text']
     keys = str(keys)
@@ -135,8 +149,10 @@ while True:
     if is_sound_playing():
         atualizar_tempo()
         event, values = window.read(timeout=1)
-    elif is_sound_playing() == False and tocando:
-        if current_song_index + 1 < song_count:
+    elif is_sound_playing() == False and tocando and event == '__TIMEOUT__':
+        print(current_song_index)
+        print(song_count-1)
+        if current_song_index < song_count-1:
             stop_sounds()
             current_song_index += 1
             play_sound(songs_in_directory[current_song_index])
@@ -154,14 +170,16 @@ while True:
                     os.remove(root +'/'+ file)
         break
     elif event == 'play':
-        tocando = True
         atualizar_tempo()
-        if is_sound_playing():
-            pass
-        if is_sound_playing() == False:
+        if is_sound_playing() == False and tocando:
+            unpause()
+        elif is_sound_playing() == False:
+            update_volume()
+            tocando = True
             play_sound(songs_in_directory[current_song_index])
             update_cover()
-
+        else:
+            pass
     
     elif event == 'pause':
         if is_sound_playing():
@@ -169,6 +187,14 @@ while True:
         else:
             unpause()
         continue
+
+    elif event == 'diminuir':
+        update_volume()
+        diminuir()
+    
+    elif event == 'aumentar':
+        update_volume()
+        aumentar()
 
     elif event == 'next':
         atualizar_tempo()
