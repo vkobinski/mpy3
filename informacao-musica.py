@@ -5,7 +5,7 @@ from PIL import Image
 
 url = "https://shazam.p.rapidapi.com/search"
 
-musica = input('Insira a musica a buscar')
+musica = input('Insira a musica a buscar: ')
 
 querystring = {"term":musica,"locale":"en-US","offset":"0","limit":"5"}
 

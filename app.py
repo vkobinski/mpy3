@@ -1,10 +1,11 @@
 import PySimpleGUI as sg
 import os
-from PySimpleGUI.PySimpleGUI import Column
+from PySimpleGUI.PySimpleGUI import RELIEF_FLAT
 import requests
 import json
 from PIL import Image
 import urllib
+import threading
 from utils.music_utilities import aumentar, diminuir, get_files_inside_directory_not_recursive, play_sound, is_sound_playing, pause_sounds, posicao, stop_sounds, unpause, volume
 from ShazamAPI import Shazam
 import misc
@@ -47,7 +48,8 @@ main = [
     [sg.Canvas(background_color='black', size=(480, 10), pad=None)],
     [sg.Column(song_title_column, background_color='black',
                justification='c', element_justification='c')],
-    [sg.Text('_'*80, background_color='black', text_color='white')],
+    [sg.Text('_'*62, background_color='black', text_color='white', key='length')],
+
     [
         sg.Column(timer_volume, background_color='black',
                justification='c', element_justification='c')
@@ -73,7 +75,7 @@ main = [
 
 
 ]
-window = sg.Window('Spotify', layout=main, size=(
+window = sg.Window('mpy3', layout=main, size=(
     480, 730), background_color='black', finalize=True, grab_anywhere=True, resizable=False,)
 
 
@@ -83,6 +85,9 @@ songs_in_directory = get_files_inside_directory_not_recursive(directory)
 song_count = len(songs_in_directory)
 current_song_index = 0
 
+for musica in songs_in_directory:
+    print(musica.split('/')[-1])
+
 window['play'].Widget.config(cursor="hand2")
 window['pause'].Widget.config(cursor="hand2")
 window['next'].Widget.config(cursor="hand2")
@@ -90,9 +95,17 @@ window['previous'].Widget.config(cursor="hand2")
 window['aumentar'].Widget.config(cursor="hand2")
 window['diminuir'].Widget.config(cursor="hand2")
 
+def atualizar_length(duracao, percorrido):
+    tamanho_dividido = duracao/62
+    percorrido = percorrido/1000
+    partes = percorrido/tamanho_dividido
+    partes = '_'*int(partes)
+    window['length'].update(partes)
+
 def atualizar_tempo():
     tempo_atual = posicao()
     tamanho = misc.file_duration(songs_in_directory[current_song_index])
+    atualizar_length(tamanho, tempo_atual)
     minutos = int((tempo_atual/60000)%60)
     segundos = int((tempo_atual/1000)%60)
     minutos_totais = int((tamanho/60))
@@ -148,15 +161,14 @@ def show_lyrics(json_obj):
 while True:
     if is_sound_playing():
         atualizar_tempo()
-        event, values = window.read(timeout=1)
+        event, values = window.read(timeout=100)
     elif is_sound_playing() == False and tocando and event == '__TIMEOUT__':
-        print(current_song_index)
-        print(song_count-1)
         if current_song_index < song_count-1:
             stop_sounds()
             current_song_index += 1
             play_sound(songs_in_directory[current_song_index])
-            update_cover()
+            x = threading.Thread(target=update_cover, args=())
+            x.run()
         else:
             print('Reached last song')
         event, values = window.read(timeout=1)   
@@ -166,7 +178,7 @@ while True:
         directories = []
         for (root, dirs, files) in os.walk(directory):
             for file in files:
-                if str(file).find('.wav') != -1:
+                if str(file).find('.ogg') != -1:
                     os.remove(root +'/'+ file)
         break
     elif event == 'play':
@@ -177,7 +189,8 @@ while True:
             update_volume()
             tocando = True
             play_sound(songs_in_directory[current_song_index])
-            update_cover()
+            x = threading.Thread(target=update_cover, args=())
+            x.start()
         else:
             pass
     
@@ -189,12 +202,12 @@ while True:
         continue
 
     elif event == 'diminuir':
-        update_volume()
         diminuir()
+        update_volume()
     
     elif event == 'aumentar':
-        update_volume()
         aumentar()
+        update_volume()
 
     elif event == 'next':
         atualizar_tempo()
@@ -202,8 +215,8 @@ while True:
             stop_sounds()
             current_song_index += 1
             play_sound(songs_in_directory[current_song_index])
-            update_cover()
-
+            x = threading.Thread(target=update_cover, args=())
+            x.start()
         else:
             print('Reached last song')
         continue
@@ -214,7 +227,8 @@ while True:
             stop_sounds()
             current_song_index -= 1
             play_sound(songs_in_directory[current_song_index])
-            update_cover()
+            x = threading.Thread(target=update_cover, args=())
+            x.start()
         else:
             print('Reached first song')
     else:
